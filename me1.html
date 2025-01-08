@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradingView Charting Library</title>
+  <script type="text/javascript" src="/charting_library/charting_library.standalone.js"></script>
+  <style>
+    #tv_chart_container {
+      position: relative;
+      height: 600px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="tv_chart_container"></div>
+
+  <script>
+    const Datafeed = {
+      onReady: function(callback) {
+        setTimeout(() => {
+          callback({
+            supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D'],
+            supports_marks: false,
+            supports_timescale_marks: false,
+            supports_time: true
+          });
+        }, 0);
+      },
+
+      getBars: function(symbolInfo, resolution, periodParams, onHistoryCallback, onErrorCallback) {
+        const { from, to, firstDataRequest } = periodParams;
+        const apiRoot = 'https://min-api.cryptocompare.com';
+        const splitSymbol = symbolInfo.name.split(/[:/]/);
+        
+        // Fixed resolution check for daily timeframe
+        const url = resolution.includes('D') ? '/data/histoday' : 
+                   parseInt(resolution) >= 60 ? '/data/histohour' : '/data/histominute';
+        
+        const qs = {
+          e: splitSymbol[0],
+          fsym: splitSymbol[1],
+          tsym: splitSymbol[2],
+          toTs: to,
+          limit: 2000
+        };
+
+        // Add logging to debug API calls
+        const apiUrl = `${apiRoot}${url}?${new URLSearchParams(qs)}`;
+        console.log('Fetching data from:', apiUrl);
+        console.log('Resolution:', resolution);
+
+        fetch(apiUrl)
+          .then(response => response.json())
+          .then(data => {
+            if (data.Response === 'Error') {
+              console.error('API Error:', data.Message);
+              onErrorCallback(data.Message);
+              return;
+            }
+            
+            const bars = data.Data.map(el => ({
+              time: el.time * 1000,
+              low: el.low,
+              high: el.high,
+              open: el.open,
+              close: el.close,
+              volume: el.volumefrom
+            }));
+
+            console.log(`Received ${bars.length} bars for resolution ${resolution}`);
+            onHistoryCallback(bars, { noData: !bars.length });
+          })
+          .catch(err => {
+            console.error('Fetch Error:', err);
+            onErrorCallback(err.message);
+          });
+      },
+
+      resolveSymbol: function(symbolName, onSymbolResolvedCallback, onResolveErrorCallback) {
+        setTimeout(() => {
+          onSymbolResolvedCallback({
+            name: symbolName,
+            description: symbolName,
+            type: 'crypto',
+            session: '24x7',
+            timezone: 'Etc/UTC',
+            minmov: 1,
+            pricescale: 100000,
+            has_intraday: true,
+            has_daily: true,  // Added to explicitly support daily resolution
+            supported_resolutions: ['1', '5', '15', '30', '60', '240', '1D']
+          });
+        }, 0);
+      },
+
+      searchSymbols: function(userInput, exchange, symbolType, onResultReadyCallback) {
+        onResultReadyCallback([]);
+      },
+
+      subscribeBars: function(symbolInfo, resolution, onRealtimeCallback, subscriberUID, onResetCacheNeededCallback) {},
+      unsubscribeBars: function(subscriberUID) {}
+    };
+
+    const widgetOptions = {
+      symbol: 'Coinbase:BTC/USD',
+      datafeed: Datafeed,
+      interval: '15',
+      container_id: 'tv_chart_container',
+      library_path: '/charting_library/',
+      locale: 'en',
+      disabled_features: [
+        'use_localstorage_for_settings',
+        'study_templates'
+      ],
+      enabled_features: [],
+      fullscreen: false,
+      autosize: true,
+      studies_overrides: {},
+      overrides: {
+        "paneProperties.background": "#131722",
+        "paneProperties.vertGridProperties.color": "#363c4e",
+        "paneProperties.horzGridProperties.color": "#363c4e",
+        "symbolWatermarkProperties.transparency": 90,
+        "scalesProperties.textColor": "#AAA",
+        "mainSeriesProperties.candleStyle.wickUpColor": '#336854',
+        "mainSeriesProperties.candleStyle.wickDownColor": '#7f323f'
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', function() {
+      if (typeof TradingView !== 'undefined') {
+        const widget = new TradingView.widget(widgetOptions);
+        widget.onChartReady(() => {
+          console.log('Chart has loaded successfully!');
+        });
+      } else {
+        console.error('TradingView library not found. Check the library_path configuration.');
+      }
+    });
+  </script>
+</body>
+</html>
